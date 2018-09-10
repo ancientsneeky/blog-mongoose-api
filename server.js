@@ -23,7 +23,7 @@ app.get("/posts", (req, res) => {
       res.json(blogs.map(blog => {
       	return {
       		id: blog._id,
-      		author: blog.nameString,
+      		author: blog.author,
       		content: blog.content,
       		title: blog.title
       	};
@@ -69,8 +69,7 @@ app.get("/posts/:id", (req, res) => {
 });
 
 app.post("/posts", (req, res) => {
-  console.log(req.body);
-  const requiredFields = ["title", "author", "content"];
+  const requiredFields = ["title", "author_id", "content"];
   for (let i = 0; i < requiredFields.length; i++) {
     const field = requiredFields[i];
     if (!(field in req.body)) {
@@ -80,19 +79,28 @@ app.post("/posts", (req, res) => {
     }
   }
 
-  Blog.create({
-    title: req.body.title,
-    content: req.body.content,
-    author: {
-      firstName: req.body.firstName,
-      lastName: req.body.lastName
-    }
-  })
-    .then(blog => res.status(201).json(blog.serialize()))
-    .catch(err => {
-      console.error(err);
-      res.status(500).json({ message: "Internal server error" });
-    });
+  Author.findById(req.body.author_id)
+  		.then(author => {
+  			if (author) {
+  				Blog.create({
+    				title: req.body.title,
+					content: req.body.content,
+					author: req.body.id
+  				})
+    			.then(blog => res.status(201).json(blog.serialize()))
+    			.catch(err => {
+      				console.error(err);
+      				res.status(500).json({ message: "Internal server error on POST /posts" });
+    			});
+  			} else {
+  				const message = 'Author not found';
+  				console.error(message);
+  				return res.status(400).send(message);
+  			}
+  		}).catch(err => {
+  			console.error(err);
+  			res.status(500).json({error: "Internal server error on POST /posts"})
+  		});
 });
 
 app.put("/posts/:id", (req, res) => {
@@ -106,15 +114,20 @@ app.put("/posts/:id", (req, res) => {
   }
 	//create a object of items we allow to be updated
   const toUpdate = {};
-  const updateableFields = ["title", "author", "content"];
+  const updateableFields = ["title", "content"];
 
   updateableFields.forEach(field => {
     if (field in req.body) {
       toUpdate[field] = req.body[field];
     }
   });
-  Blog.findByIdAndUpdate(req.params.id, { $set: toUpdate })
-    .then(Blog => res.status(204).end())
+  Blog.findByIdAndUpdate(req.params.id, { $set: toUpdate }, {new: true})
+    .then(blog => res.status(200).json({
+    	title: blog.title,
+    	content: blog.content,
+    	author: blog.author.nameString,
+    	created: blog.created
+    }))
     .catch(err => res.status(500).json({ message: "Internal server error" }));
 });
 
@@ -242,9 +255,16 @@ app.put('/authors/:id', (req, res) => {
 
 
 app.delete('/authors/:id', (req, res) => {
-	Author.findByIdAndRemove(req.params.id)
-	.then(blog => res.status(204).end())
-	.catch(err => res.status(500).json({ message: "Internal server error" }));
+	Blog.remove({ author: req.params.id})
+	.then(() => {
+		Author.findByIdAndRemove(req.params.id)
+				.then(() => res.status(204).json({message: `deleted ${req.params.id} account and blog posts owned by them`}))
+				.catch(err => res.status(500).json({ message: "Internal server error on DELETE /authors" }));
+	})
+	.catch(err => {
+		console.error(err);
+		res.status(500).json({error: 'Internal server error on DELETE /authors'});
+	});
 });
 
 // catch-all endpoint if client makes request to non-existent endpoint

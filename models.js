@@ -7,7 +7,7 @@ mongoose.Promise = global.Promise;
 const authorSchema = mongoose.Schema({
 	firstName: {type: "string", required: true},
     lastName: {type: "string", required: true},
-    userName: {type: "string", unique: true, required: true}
+    userName: {type: "string", unique: true, required: true},
 });
 
 const commentSchema = mongoose.Schema({content: "string"});
