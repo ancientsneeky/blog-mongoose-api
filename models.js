@@ -1,20 +1,39 @@
 "use strict";
 
 const mongoose = require("mongoose");
+mongoose.Promise = global.Promise;
 
-// this is our blog schema
-const blogSchema = mongoose.Schema({
-  title: { type: String, required: true },
-  content: { type: String, required: true },
-  author: {
-    firstName: {type: String, required: true},
-    lastName: {type: String, required: true},
-  },
-  created: { type: Date, default: Date.now }
+
+const authorSchema = mongoose.Schema({
+	firstName: {type: "string", required: true},
+    lastName: {type: "string", required: true},
+    userName: {type: "string", unique: true, required: true}
 });
 
-blogSchema.virtual("nameString").get(function() {
-  return `${this.author.firstName} ${this.author.lastName}`.trim();
+const commentSchema = mongoose.Schema({content: "string"});
+
+const blogSchema = mongoose.Schema({
+  title: { type: "string", required: true },
+  content: { type: "string", required: true },
+  author: { type: mongoose.Schema.Types.ObjectId, ref: "Author"},
+  created: { type: Date, default: Date.now },
+  comments: [commentSchema]
+});
+
+// pre hook author access for serialize
+blogSchema.pre('find', function(next) {
+	this.populate('author');
+	next();
+});
+
+// pre hook author access for serialize
+blogSchema.pre('findOne', function(next) {
+	this.populate('author');
+	next();
+});
+
+authorSchema.virtual("nameString").get(function() {
+  return `${this.firstName} ${this.lastName}`.trim();
 });
 
 blogSchema.methods.serialize = function() {
@@ -23,10 +42,22 @@ blogSchema.methods.serialize = function() {
     author: this.nameString,
     title: this.title,
     content: this.content,
-    created: this.created
+    created: this.created,
+    comments: this.comments
   };
 };
 
-const Blog = mongoose.model("blog-posts", blogSchema);
+authorSchema.methods.serialize = function() {
+	return {
+		id: this._id,
+		username: this.userName,
+		author: this.nameString
+	};
+};
 
-module.exports = { Blog };
+
+const Author = mongoose.model("Author", authorSchema);
+const Blog = mongoose.model("BlogPosts", blogSchema);
+
+
+module.exports = { Blog, Author };
